@@ -1,0 +1,77 @@
+ScreenManager:
+    LoginScreen:
+    TradingScreen:
+
+<LoginScreen>:
+    name: 'SFX Login'
+    MDBoxLayout:
+        orientation: 'vertical'
+        padding: dp(20)
+        spacing: dp(20)
+        MDLabel:
+            text: "SlingShotFX-Demo(Kabelo)"
+            halign: "center"
+        MDIcon:
+            icon: "account"
+            halign: "center"
+        MDTextField:
+            id: server_input
+            hint_text: "Server"
+            text: 'JustMarkets-Demo'
+        MDIcon:
+            icon: "key"
+            halign: "center"
+        MDTextField:
+            id: password_input
+            hint_text: "Password"
+            password: True
+            password_mask: '*'
+        MDRaisedButton:
+            text: "Login"
+            pos_hint: {"center_x": 0.5}
+            on_press: app.mt5_login(server_input.text, '2000382894', password_input.text)
+
+<TradingScreen>:
+    name: 'trading'
+    MDBoxLayout:
+        orientation: 'vertical'
+        padding: dp(20)
+        spacing: dp(20)
+        MDTextField:
+            id: symbol_input
+            hint_text: "Currency Symbol"
+            text: "AUDUSDm"
+        MDTextField:
+            id: volume_input
+            hint_text: "Volume"
+            text: "0.01"
+        MDRaisedButton:
+            text: "Start Trading"
+            id: start_button
+            pos_hint: {"center_x": 0.5}
+            on_press: app.start_trading(symbol_input.text, volume_input.text)
+        MDRaisedButton:
+            text: "Stop Trading"
+            id: stop_button
+            pos_hint: {"center_x": 0.5}
+            disabled: True
+            on_press: app.stop_trading()
+        MDRaisedButton:
+            text: "Clear Log"
+            pos_hint: {"center_x": 0.5}
+            on_press: app.clear_log()
+        ScrollView:
+            MDBoxLayout:
+                id: log_box
+                orientation: 'vertical'
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: dp(10)
+        MDLabel:
+            text: ""
+            id: trade_status_label
+            halign: "center"
+        MDLabel:
+            text: "MetaTrader5"
+            id: countdown_label
+            halign: "center"
