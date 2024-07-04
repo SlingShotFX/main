@@ -1,5 +1,5 @@
 import MetaTrader5 as mt5
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 from kivy.lang import Builder
 from kivymd.app import MDApp
@@ -13,14 +13,10 @@ from kivy.resources import resource_add_path
 from kivy.uix.scrollview import ScrollView
 from kivymd.icon_definitions import md_icons
 
-# Add the path to your resources
-from kivy.resources import resource_add_path
-
 resource_add_path(r'C:\Users\kkayg\AppData\Roaming\Python\Python312\site-packages\kivymd')
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
-
 
 class LoginScreen(MDScreen):
     pass
@@ -32,36 +28,50 @@ class SlingShotFX(MDApp):
     trades_executed = 0
     next_trade_time = None
     trading_event = None
+    ellipsis_text = "Executing"
+    ellipsis_cycle_event = None
 
     def build(self):
         self.icon = r'C:\Users\kkayg\Desktop\roboto\sfx.png'
         self.theme_cls.theme_style = "Light"
-        self.theme_cls.primary_palette = "Blue"
-        return Builder.load_file("main.kv")
+        self.theme_cls.primary_palette = "Teal"
+        return Builder.load_string(kv)
 
     def mt5_login(self, server, login_id, password):
         if not mt5.initialize(login=int(login_id), password=password, server=server):
             logging.error("initialize() failed, error code = %s", mt5.last_error())
+            self.update_log(f"Login failed: {mt5.last_error()}")
             return False
         logging.info("Connected to %s", server)
+        self.update_log(f"Connected to {server}")
         self.root.current = 'trading'
         return True
 
-    def start_trading(self, symbol, volume):
+    def start_ellipsis_animation(self):
+        self.ellipsis_cycle_event = Clock.schedule_interval(lambda dt: self.cycle_ellipsis(), 0.5)
+
+    def stop_ellipsis_animation(self):
+        if self.ellipsis_cycle_event:
+            self.ellipsis_cycle_event.cancel()
+
+    def cycle_ellipsis(self):
+        if len(self.ellipsis_text) >= 12:  # Maximum length reached, reset
+            self.ellipsis_text = "Executing"
+        else:
+            self.ellipsis_text += "."
+        self.update_trade_status(self.ellipsis_text)
+
+    def start_trading(self, symbol, volume, max_trades):
         self.trades_executed = 0
+        self.max_trades = int(max_trades)
         self.volume = float(volume)
         self.trading_event = Clock.schedule_interval(lambda dt: self.trade(symbol), 5)
         self.root.get_screen('trading').ids.start_button.disabled = True
         self.root.get_screen('trading').ids.stop_button.disabled = False
         logging.info("Trading started.")
         self.update_log("Trading started.")
-        self.update_trade_status("Executing...")
-
-    def update_countdown(self, dt):
-        if self.next_trade_time:
-            remaining_time = self.next_trade_time - datetime.now()
-            minutes, seconds = divmod(remaining_time.total_seconds(), 60)
-            self.root.get_screen('trading').ids.countdown_label.text = f"Countdown: {int(minutes):02}:{int(seconds):02}"
+        self.update_trade_status("Executing")
+        self.start_ellipsis_animation()
 
     def stop_trading(self):
         if self.trading_event:
@@ -70,10 +80,10 @@ class SlingShotFX(MDApp):
             mt5.shutdown()
             self.root.get_screen('trading').ids.start_button.disabled = False
             self.root.get_screen('trading').ids.stop_button.disabled = True
-            logging.info("Trading stopped.")
-            self.update_log("Trading stopped.")
             self.update_trade_status("Trading stopped.")
+            self.stop_ellipsis_animation()
             self.root.get_screen('trading').ids.countdown_label.text = "MetaTrader5"
+            self.root.current = 'SFX Login'
 
     def clear_log(self):
         self.root.get_screen('trading').ids.log_box.clear_widgets()
@@ -89,6 +99,8 @@ class SlingShotFX(MDApp):
         rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
         if rates is None or len(rates) < count:
             logging.error("Failed to retrieve candle data for %s", symbol)
+            self.update_log(f"Failed to retrieve candle data for {symbol}")
+            self.stop_ellipsis_animation()
             return None
         return rates
 
@@ -113,17 +125,17 @@ class SlingShotFX(MDApp):
         bearish_points = []
 
         # Refined Bullish condition
-        if prev1['close'] > prev1['open'] and current['close'] > prev1['close'] and current['open'] < prev1['close']:
+        if prev1['close'] < prev1['open'] and current['close'] < prev1['close'] and current['open'] > prev1['close']:
             bullish_points.append(current)
 
         # Refined Bearish condition
-        if prev1['close'] < prev1['open'] and current['close'] < prev1['close'] and current['open'] > prev1['close']:
+        if prev1['close'] > prev1['open'] and current['close'] > prev1['close'] and current['open'] < prev1['close']:
             bearish_points.append(current)
 
         return bullish_points, bearish_points
 
     def execute_trade(self, symbol, action):
-        if self.trades_executed >= 5:
+        if self.trades_executed >= self.max_trades:
             logging.info("Maximum trades executed. Exiting.")
             self.update_trade_status("Maximum trades executed.")
             return
@@ -131,12 +143,14 @@ class SlingShotFX(MDApp):
         if action not in ["buy", "sell"]:
             logging.error("Invalid trade action")
             self.update_trade_status("Invalid trade action")
+            self.stop_ellipsis_animation()
             return
 
         tick = mt5.symbol_info_tick(symbol)
         if not tick or not tick.bid or not tick.ask:
             logging.error("Failed to get tick for symbol %s", symbol)
             self.update_trade_status("Failed to get tick for symbol.")
+            self.stop_ellipsis_animation()
             return
 
         price = tick.ask if action == "buy" else tick.bid
@@ -145,6 +159,7 @@ class SlingShotFX(MDApp):
         if not symbol_info:
             logging.error("Failed to get symbol info for %s", symbol)
             self.update_trade_status("Failed to get symbol info.")
+            self.stop_ellipsis_animation()
             return
 
         # Ensure volume is within the allowed range
@@ -160,28 +175,37 @@ class SlingShotFX(MDApp):
 
         logging.info("Executing %s %s %s at %s with volume %s", action, rounded_volume, symbol, price, volume)
         self.update_log(f"Executing {action} {rounded_volume} {symbol} at {price}")
+        self.stop_ellipsis_animation()
 
-        request = {
-            "action": mt5.TRADE_ACTION_DEAL,
-            "symbol": symbol,
-            "volume": rounded_volume,
-            "type": mt5.ORDER_TYPE_BUY if action == "buy" else mt5.ORDER_TYPE_SELL,
-            "price": price,
-            "deviation": 10,
-            "magic": 234000,
-            "comment": "SlingShotFX",
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
-        }
+        filling_modes = [mt5.ORDER_FILLING_FOK, mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN]
+        for filling_mode in filling_modes:
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": rounded_volume,
+                "type": mt5.ORDER_TYPE_BUY if action == "buy" else mt5.ORDER_TYPE_SELL,
+                "price": price,
+                "deviation": 10,
+                "magic": 234000,
+                "comment": "SlingShotFX",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": filling_mode,
+            }
 
-        result = mt5.order_send(request)
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
-            logging.error("Failed to send order: %s, %s", result.retcode, result.comment)
-            self.update_trade_status(f"Order failed: {result.comment}")
-        else:
-            self.trades_executed += 1
-            logging.info("Order executed: %s %s %s at %s", action, rounded_volume, symbol, price)
-            self.update_trade_status(f"Order executed: {action} {rounded_volume} {symbol} at {price}")
+            result = mt5.order_send(request)
+            if result.retcode == mt5.TRADE_RETCODE_DONE:
+                self.trades_executed += 1
+                logging.info("Order executed: %s %s %s at %s", action, rounded_volume, symbol, price)
+                self.update_trade_status(f"Order executed: {action} {rounded_volume} {symbol} at {price}")
+                self.update_log(f"Order executed: {action} {rounded_volume} {symbol} at {price}")
+                self.stop_ellipsis_animation()  # Stop ellipsis animation on successful order execution
+                return
+            else:
+                logging.error("Failed to send order with filling mode %s: %s, %s", filling_mode, result.retcode, result.comment)
+                self.update_log(f"Order failed with filling mode {filling_mode}: {result.comment}")
+                self.stop_ellipsis_animation()
+
+        self.update_trade_status(f"Order failed for all filling modes.")
 
 if __name__ == '__main__':
     Window.size = (360, 640)
