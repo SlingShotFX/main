@@ -35,7 +35,7 @@ class SlingShotFX(MDApp):
         self.icon = r'C:\Users\kkayg\Desktop\roboto\sfx.png'
         self.theme_cls.theme_style = "Light"
         self.theme_cls.primary_palette = "Teal"
-        return Builder.load_string(kv)
+        return Builder.load_file("main.kv")  # Load the KV file
 
     def mt5_login(self, server, login_id, password):
         if not mt5.initialize(login=int(login_id), password=password, server=server):
