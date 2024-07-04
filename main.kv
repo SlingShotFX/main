@@ -9,7 +9,7 @@ ScreenManager:
         padding: dp(20)
         spacing: dp(20)
         MDLabel:
-            text: "SlingShotFX-Demo(Kabelo)"
+            text: "SlingShotFX(Phiri)"
             halign: "center"
         MDIcon:
             icon: "account"
@@ -17,7 +17,7 @@ ScreenManager:
         MDTextField:
             id: server_input
             hint_text: "Server"
-            text: 'JustMarkets-Demo'
+            text: ''
         MDIcon:
             icon: "key"
             halign: "center"
@@ -29,7 +29,7 @@ ScreenManager:
         MDRaisedButton:
             text: "Login"
             pos_hint: {"center_x": 0.5}
-            on_press: app.mt5_login(server_input.text, '2000382894', password_input.text)
+            on_press: app.mt5_login(server_input.text, '154948014', password_input.text)
 
 <TradingScreen>:
     name: 'trading'
@@ -40,16 +40,20 @@ ScreenManager:
         MDTextField:
             id: symbol_input
             hint_text: "Currency Symbol"
-            text: "AUDUSDm"
+            text: ""
         MDTextField:
             id: volume_input
             hint_text: "Volume"
-            text: "0.01"
+            text: ""
+        MDTextField:
+            id: trades_input
+            hint_text: "Max Trades"
+            text: ""
         MDRaisedButton:
             text: "Start Trading"
             id: start_button
             pos_hint: {"center_x": 0.5}
-            on_press: app.start_trading(symbol_input.text, volume_input.text)
+            on_press: app.start_trading(symbol_input.text, volume_input.text, trades_input.text)
         MDRaisedButton:
             text: "Stop Trading"
             id: stop_button
